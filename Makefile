@@ -11,7 +11,7 @@ TESTDIR=./test
 TESTBINDIR=./testbin
 
 ifeq (${CXX}, icpc)
-  CXX_OPTIONS=-qopenmp -std=c++11
+  CXX_OPTIONS=-qopenmp -std=c++11 -DLATENT_VEC_DIM=$(LATENT_VEC_DIM)
 else
   CXX_OPTIONS=-fopenmp --std=c++11 -I/usr/include/mpi/
 endif

@@ -28,209 +28,217 @@
 * ******************************************************************************/
 /* Narayanan Sundaram (Intel Corp.)
  * ******************************************************************************/
-#include <omp.h>
 #include "GraphMatRuntime.h"
+#include <omp.h>
 
 const int MAX_THREADS = 120;
 
-template <unsigned int K>
+
+template<unsigned int K>
 class LatentVector {
   public:
-    double lv[K];
-    double sqerr;
+  double lv[K];
+  double sqerr;
 
   public:
-    LatentVector() {
-    }
-    ~LatentVector() {
-    }
+  LatentVector() {
+  }
+  ~LatentVector() {
+  }
 
-    bool operator !=(const LatentVector<K>& p) {
-      bool result = false;
-      for (int i = 0; i < K; i++) {
-        if (fabs(p.lv[i] - lv[i]) > 1e-7) {
-          result = true;
-        }
-      }
-      return result;
-    }
-    
-    void operator +=(const LatentVector<K> &p) {
-      for (int i = 0; i < K; i++) {
-        lv[i] += p.lv[i];
+  bool operator!=(const LatentVector<K> &p) {
+    bool result = false;
+    for (int i = 0; i < K; i++) {
+      if (fabs(p.lv[i] - lv[i]) > 1e-7) {
+        result = true;
       }
     }
-    void scale(double s) {
-      for (int i =0; i < K; i++) {
-        lv[i] *= s;
-      }
-    }
+    return result;
+  }
 
-    void print() const {
-      for (int i = 0; i < K; i++) {
-        printf(" %.2f ", lv[i]);
-      }
+  void operator+=(const LatentVector<K> &p) {
+    for (int i = 0; i < K; i++) {
+      lv[i] += p.lv[i];
     }
+  }
+  void scale(double s) {
+    for (int i = 0; i < K; i++) {
+      lv[i] *= s;
+    }
+  }
 
+  void print() const {
+    for (int i = 0; i < K; i++) {
+      printf(" %.2f ", lv[i]);
+    }
+  }
 };
 
 template<unsigned int K>
-class SGDProgram : public GraphMat::GraphProgram<LatentVector<K>, LatentVector<K>, LatentVector<K> > {
+class SGDProgram : public GraphMat::GraphProgram<LatentVector<K>, LatentVector<K>, LatentVector<K>> {
   public:
-    double lambda;
-    double step;
+  double lambda;
+  double step;
 
   public:
-    SGDProgram(double l, double s) {
-      lambda = l;
-      step = s;
-      this->order = GraphMat::ALL_EDGES;// check
-      this->activity = GraphMat::ALL_VERTICES;
-    }
+  SGDProgram(double l, double s) {
+    lambda = l;
+    step = s;
+    this->order = GraphMat::ALL_EDGES;// check
+    this->activity = GraphMat::ALL_VERTICES;
+  }
 
-  void reduce_function(LatentVector<K>& v, const LatentVector<K>& w) const {
+  void reduce_function(LatentVector<K> &v, const LatentVector<K> &w) const {
     for (int i = 0; i < K; i++) v.lv[i] += w.lv[i];
   }
 
-  void process_message(const LatentVector<K>& message, const int edge_val, 
-                        const LatentVector<K>& vertexprop, LatentVector<K>& res) const {
+  void process_message(const LatentVector<K> &message, const int edge_val,
+                       const LatentVector<K> &vertexprop, LatentVector<K> &res) const {
     double estimate = 0;
     for (int i = 0; i < K; i++) {
-      estimate += message.lv[i]*vertexprop.lv[i];
+      estimate += message.lv[i] * vertexprop.lv[i];
     }
     double error = edge_val - estimate;
 
-    for (int i =0; i < K; i++) {
-      res.lv[i] =  message.lv[i]*error;
+    for (int i = 0; i < K; i++) {
+      res.lv[i] = message.lv[i] * error;
     }
   }
 
-  bool send_message(const LatentVector<K>& vertexprop, LatentVector<K>& message) const {
+  bool send_message(const LatentVector<K> &vertexprop, LatentVector<K> &message) const {
     message = vertexprop;
     return true;
   }
 
-  void apply(const LatentVector<K>& message_out, LatentVector<K>& vertexprop) {
-    for (int i =0; i < K; i++) {
-      vertexprop.lv[i] += step*(-lambda*vertexprop.lv[i] +message_out.lv[i]);
+  void apply(const LatentVector<K> &message_out, LatentVector<K> &vertexprop) {
+    for (int i = 0; i < K; i++) {
+      vertexprop.lv[i] += step * (-lambda * vertexprop.lv[i] + message_out.lv[i]);
     }
   }
-
-
 };
 
 template<unsigned int K>
-class RMSEProgram : public GraphMat::GraphProgram<LatentVector<K>, double, LatentVector<K> > {
-  
+class RMSEProgram : public GraphMat::GraphProgram<LatentVector<K>, double, LatentVector<K>> {
+
   public:
   RMSEProgram() {
     this->order = GraphMat::IN_EDGES;
   }
 
   public:
-
-  void reduce_function(double& v, const double& w) const {
+  void reduce_function(double &v, const double &w) const {
     v += w;
   }
 
-  void process_message(const LatentVector<K>& message, const int edge_val, 
-                        const LatentVector<K>& vertexprop, double& res) const {
+  void process_message(const LatentVector<K> &message, const int edge_val,
+                       const LatentVector<K> &vertexprop, double &res) const {
     //res = message * edge_val;
     double est = 0;
     for (int i = 0; i < K; i++) {
-      est += message.lv[i]*vertexprop.lv[i];
+      est += message.lv[i] * vertexprop.lv[i];
     }
     double error = edge_val - est;
-    res = error*error;
-
+    res = error * error;
   }
 
-  bool send_message(const LatentVector<K>& vertexprop, LatentVector<K>& message) const {
+  bool send_message(const LatentVector<K> &vertexprop, LatentVector<K> &message) const {
     message = vertexprop;
     return true;
   }
 
-  void apply(const double& message_out, LatentVector<K>& vertexprop) {
+  void apply(const double &message_out, LatentVector<K> &vertexprop) {
     vertexprop.sqerr = message_out;
   }
 };
 
 template<class V>
-void return_sqerr(V* vertexprop, double* out, void* params) {
+void return_sqerr(V *vertexprop, double *out, void *params) {
   *out = vertexprop->sqerr;
 }
 
-void run_sgd(char* filename) {
-  const int k = 20;
-  GraphMat::Graph< LatentVector<k> > G;
-  G.ReadMTX(filename); 
+void run_sgd(char *filename, int num_iter, int num_expts) {
+  // const int k = 8;
+  const int k = LATENT_VEC_DIM;
+  GraphMat::Graph<LatentVector<k>> G;
+  G.ReadMTX(filename);
 
   double err = 0.0;
 
   SGDProgram<k> sgdp(0.001, 0.00000035);
   RMSEProgram<k> rmsep;
 
-  auto sgdp_tmp = GraphMat::graph_program_init(sgdp, G);
-  auto rmsep_tmp = GraphMat::graph_program_init(rmsep, G);
 
-  for (int i = 1; i <= G.getNumberOfVertices(); i++) {
-    LatentVector<k> v;
-    v.sqerr = 0.0;
-    unsigned int r = i;
-    for (int j = 0; j < k; j++) {
-      v.lv[j] = ((double)rand_r(&r)/(double)RAND_MAX);
+  for (int expt = 1; expt <= num_expts; expt++) {
+    auto sgdp_tmp = GraphMat::graph_program_init(sgdp, G);
+    auto rmsep_tmp = GraphMat::graph_program_init(rmsep, G);
+
+    for (int i = 1; i <= G.getNumberOfVertices(); i++) {
+      LatentVector<k> v;
+      v.sqerr = 0.0;
+      unsigned int r = i;
+      for (int j = 0; j < k; j++) {
+        // v.lv[j] = ((double) rand_r(&r) / (double) RAND_MAX);// randinit
+        // std::cout << "i: "<<  i <<"\n";
+        // std::cout << "v.lv[j] : "<<  v.lv[j]  <<"\n";
+        v.lv[j] = 0.5; // 1/2 init
+      }
+      G.setVertexproperty(i, v);
     }
-    G.setVertexproperty(i, v);
-  }
-  
-  G.setAllActive();
-  GraphMat::run_graph_program(&rmsep, G, 1, &rmsep_tmp);
 
-  err = 0.0;
-  G.applyReduceAllVertices(&err, return_sqerr, GraphMat::AddFn);
-  printf("RMSE error = %lf per edge \n", sqrt(err/(G.nnz)));
+    G.setAllActive();
+    GraphMat::run_graph_program(&rmsep, G, 1, &rmsep_tmp);
 
-  printf("SGD Init over\n");
-  
-  struct timeval start, end;
+    err = 0.0;
+    G.applyReduceAllVertices(&err, return_sqerr, GraphMat::AddFn);
+    printf("RMSE error = %lf per edge \n", sqrt(err / (G.nnz)));
 
-  gettimeofday(&start, 0);
+    printf("SGD Init over\n");
 
-  G.setAllActive();
-  GraphMat::run_graph_program(&sgdp, G, 10, &sgdp_tmp);
+    struct timeval start, end;
+    gettimeofday(&start, 0);
 
-  gettimeofday(&end, 0);
-  
-  double time = (end.tv_sec-start.tv_sec)*1e3+(end.tv_usec-start.tv_usec)*1e-3;
-  printf("Time = %.3f ms \n", time);
+    G.setAllActive();
+    GraphMat::run_graph_program(&sgdp, G, num_iter, &sgdp_tmp);
 
-  G.setAllActive();
-  GraphMat::run_graph_program(&rmsep, G, 1, &rmsep_tmp);
+    gettimeofday(&end, 0);
 
-  GraphMat::graph_program_clear(rmsep_tmp);
-  GraphMat::graph_program_clear(sgdp_tmp);
 
-  err = 0.0;
-  G.applyReduceAllVertices(&err, return_sqerr, GraphMat::AddFn);
-  printf("RMSE error = %lf per edge \n", sqrt(err/(G.nnz)));
+    double time = (end.tv_sec - start.tv_sec) * 1e3 + (end.tv_usec - start.tv_usec) * 1e-3;
+    printf("Time = %.3f ms \n", time);
 
-  for (int i = 1; i <= std::min(10, G.getNumberOfVertices()); i++) { 
-    if (G.vertexNodeOwner(i)) {
-      printf("%d : ", i) ;
-      G.getVertexproperty(i).print();
-      printf("\n");
+    G.setAllActive();
+    GraphMat::run_graph_program(&rmsep, G, 1, &rmsep_tmp);
+
+    GraphMat::graph_program_clear(rmsep_tmp);
+    GraphMat::graph_program_clear(sgdp_tmp);
+
+    err = 0.0;
+    G.applyReduceAllVertices(&err, return_sqerr, GraphMat::AddFn);
+    printf("RMSE error = %lf per edge \n", sqrt(err / (G.nnz)));
+
+    // for (int i = 1; i <= std::min(100, G.getNumberOfVertices()); i++) {
+      for (int i = 17616;  i < 17616 + 10; ++i){
+      if (G.vertexNodeOwner(i)) {
+        printf("%d : ", i);
+        G.getVertexproperty(i).print();
+        printf("\n");
+      }
     }
   }
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   if (argc < 2) {
     printf("Correct format: %s A.mtx \n", argv[0]);
     return 0;
   }
   MPI_Init(&argc, &argv);
+  int num_iter = atoi(argv[2]);
+  int num_expts = atoi(argv[3]);
+  std::cout << "LATENT_VEC_DIM: " << LATENT_VEC_DIM << "\n";
 
-  run_sgd(argv[1]); 
-  MPI_Finalize(); 
+  std::cout << "num_iter: " << num_iter << "\n";
+  std::cout << "num_expts: " << num_expts << "\n";
+  run_sgd(argv[1], num_iter, num_expts);
+  MPI_Finalize();
 }
-
