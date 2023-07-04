@@ -30,7 +30,6 @@
  * ******************************************************************************/
 #include "GraphMatRuntime.h"
 
-
 class PR {
   public:
   float pagerank;

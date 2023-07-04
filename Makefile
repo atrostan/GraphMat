@@ -11,7 +11,7 @@ TESTDIR=./test
 TESTBINDIR=./testbin
 
 ifeq (${CXX}, icpc)
-  CXX_OPTIONS=-qopenmp -std=c++11 -DLATENT_VEC_DIM=$(LATENT_VEC_DIM)
+  CXX_OPTIONS=-qopenmp -std=c++11 -DLATENT_VEC_DIM=$(LATENT_VEC_DIM) -DBOOST_ERROR_CODE_HEADER_ONLY
 else
   CXX_OPTIONS=-fopenmp --std=c++11 -I/usr/include/mpi/
 endif
@@ -22,7 +22,7 @@ ifeq (${debug}, 1)
   CXX_OPTIONS += -O0 -g -D__DEBUG 
 else
   ifeq (${CXX}, icpc)
-    CXX_OPTIONS += -O3 -ipo 
+    CXX_OPTIONS += -O3 -ipo -lboost_serialization
   else
     CXX_OPTIONS += -O3 -flto -fwhole-program
   endif
